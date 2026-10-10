@@ -6,9 +6,30 @@
   <title>Chrono Précision</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
   
+  <!-- Firebase SDKs pour la synchro en ligne -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = typeof __FIREBASE_CONFIG__ !== 'undefined' ? __FIREBASE_CONFIG__ : {
+      apiKey: "mock", projectId: "mock"
+    };
+
+    let db = null;
+    try {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+    } catch(e) {
+      console.warn("Firebase non initialisé", e);
+    }
+
+    window.firebaseDB = { db, doc, setDoc, onSnapshot, getDoc };
+    window.dispatchEvent(new Event('firebase-ready'));
+  </script>
+
   <style>
     :root {
       --bg-color: #0f172a;
@@ -18,23 +39,26 @@
       --primary-hover: #0284c7;
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --danger: #ef4444;
       --radius: 16px;
 
-      /* Couleurs DISTINCTES des Manches */
-      --color-r1: #ec4899; /* Rose / Fuchsia */
-      --color-r2: #f59e0b; /* Ambre / Jaune */
-      --color-r3: #10b981; /* Vert Émeraude */
-      --color-r4: #06b6d4; /* Cyan */
-      --color-r5: #f97316; /* Orange */
+      --color-r1: #00f0ff;
+      --color-r2: #d946ef;
+      --color-r3: #f59e0b;
+      --color-r4: #10b981;
+      --color-r5: #f43f5e;
 
-      /* Couleurs DISTINCTES des Joueurs */
-      --color-p1: #38bdf8; /* Bleu Néon */
-      --color-p2: #c084fc; /* Violet / Magenta */
-      --color-p3: #84cc16; /* Vert Lime */
-      --color-p4: #f43f5e; /* Rouge Corail */
+      --color-p1: #818cf8;
+      --color-p2: #ff6b00;
+      --color-p3: #84cc16;
+      --color-p4: #a855f7;
+
+      --color-perfect: #22c55e;
+      --color-good: #eab308;
+      --color-medium: #f97316;
+      --color-bad: #ef4444;
+
+      --btn-next-round-bg: #06b6d4;
+      --btn-next-round-hover: #0891b2;
     }
 
     * {
@@ -55,6 +79,92 @@
       align-items: center;
       justify-content: center;
       padding: 1.5rem 1rem;
+      position: relative;
+    }
+
+    /* Bouton Salon en haut à gauche */
+    .room-btn-top {
+      position: absolute;
+      top: 1.2rem;
+      left: 1.2rem;
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.5rem 0.9rem;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      z-index: 10;
+    }
+    .room-btn-top:hover {
+      background: #334155;
+      border-color: var(--primary);
+    }
+    .room-btn-top.active-room {
+      border-color: var(--color-perfect);
+      color: var(--color-perfect);
+    }
+
+    /* Modale Salon */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 1.8rem;
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .modal-card h2 {
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .modal-input {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      color: #fff;
+      padding: 0.75rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      width: 100%;
+      text-align: center;
+      letter-spacing: 0.2em;
+      font-weight: 700;
+    }
+    .modal-input:focus {
+      border-color: var(--primary);
+    }
+    .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
     }
 
     .container {
@@ -63,36 +173,45 @@
       display: flex;
       flex-direction: column;
       gap: 1.25rem;
+      margin-top: 2rem;
     }
 
     header {
       text-align: center;
+      padding: 0.5rem 0;
     }
 
     h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
+      font-size: 2.7rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #38bdf8 0%, #c084fc 50%, #f43f5e 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      filter: drop-shadow(0 4px 20px rgba(192, 132, 252, 0.35));
     }
 
     p.subtitle {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-top: 0.2rem;
+      color: #cbd5e1;
+      font-size: 1.1rem;
+      font-weight: 500;
+      margin-top: 0.45rem;
+      letter-spacing: 0.01em;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
     }
 
     .card {
       background: var(--card-bg);
-      border: 1px solid var(--card-border);
+      border: 2px solid var(--card-border);
       border-radius: var(--radius);
       padding: 1.5rem;
       display: flex;
       flex-direction: column;
       gap: 1rem;
       position: relative;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
     }
 
-    /* Selecteurs de Modes et Config */
     .mode-selector {
       display: flex;
       background: #0f172a;
@@ -132,20 +251,22 @@
 
     .opt-btns {
       display: flex;
-      gap: 0.4rem;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .opt-btn {
       border: 1px solid var(--card-border);
       background: transparent;
       color: var(--text-muted);
-      min-width: 32px;
+      min-width: 30px;
       height: 30px;
       border-radius: 6px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 0.8rem;
-      padding: 0 0.3rem;
+      font-size: 0.78rem;
+      padding: 0 0.25rem;
     }
 
     .opt-btn.active {
@@ -154,7 +275,48 @@
       border-color: var(--primary);
     }
 
-    /* Info Manche & Tour */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .3s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: var(--primary);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
     .status-bar {
       display: flex;
       justify-content: space-between;
@@ -167,7 +329,6 @@
       font-size: 0.9rem;
     }
 
-    /* Cible & Chrono */
     .target-box {
       text-align: center;
     }
@@ -194,92 +355,203 @@
       font-size: 3.5rem;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
-      border: 1px solid var(--card-border);
-      transition: border-color 0.2s;
+      border: 2px solid var(--card-border);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .timer-display.running {
       border-color: var(--primary);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
     }
 
     .result-feedback {
       text-align: center;
-      min-height: 40px;
+      min-height: 42px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
     .diff-badge {
-      font-size: 1.1rem;
-      font-weight: 600;
-      padding: 0.2rem 0.8rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      padding: 0.3rem 1rem;
       border-radius: 20px;
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border: 1.5px solid currentColor;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.3);
     }
 
-    .diff-perfect { background: rgba(34, 197, 94, 0.15); color: var(--success); }
-    .diff-good { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
-    .diff-bad { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
-
-    /* Tableaux de Scores & Encadrés à contour complet */
     .scoreboard {
       display: flex;
       flex-direction: column;
-      gap: 0.5rem;
-      max-height: 250px;
+      gap: 0.55rem;
+      max-height: 320px;
       overflow-y: auto;
+      padding: 4px 6px;
+      border-radius: 8px;
     }
 
     .score-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.6rem 0.85rem;
+      padding: 0.65rem 0.85rem;
       background: #0f172a;
       border-radius: 10px;
       font-size: 0.85rem;
-      border: 2px solid transparent; /* Contour par défaut */
-      transition: border-color 0.2s ease, transform 0.15s ease;
+      border: 2px solid transparent;
+      box-sizing: border-box;
+      width: 100%;
+      transition: all 0.2s ease;
     }
 
-    .score-row.current {
-      background: rgba(15, 23, 42, 0.95);
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+    .score-row.active-turn {
+      box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
     }
 
-    .score-row.summary {
-      background: rgba(56, 189, 248, 0.1);
-      border: 2px solid var(--primary) !important;
+    .badge-round, .badge-player {
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 5px;
       font-weight: 700;
-      color: var(--primary);
-    }
-
-    .score-row.rank-1 {
-      background: rgba(234, 179, 8, 0.1);
-      border: 2px solid #eab308 !important;
-      font-weight: 600;
-    }
-
-    /* Badges Couleurs Intérieurs */
-    .badge-round {
-      font-size: 0.75rem;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-weight: 600;
       margin-right: 6px;
       display: inline-block;
+      cursor: pointer;
+    }
+    .badge-player:hover {
+      opacity: 0.8;
+      filter: brightness(1.2);
+    }
+
+    .nickname-input {
+      background: #ffffff;
+      color: #0f172a;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      outline: none;
+      width: 100px;
+    }
+
+    .diff-pill {
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 12px;
       border: 1px solid currentColor;
     }
 
-    .badge-player {
+    .grand-summary-card {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(15, 23, 42, 0.95));
+      border: 2px solid var(--color-perfect);
+      border-radius: 12px;
+      padding: 1.25rem 1rem;
+      text-align: center;
+      box-shadow: 0 0 25px rgba(34, 197, 94, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.3rem;
+      margin-top: 0.2rem;
+    }
+
+    .grand-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--color-perfect);
+      font-weight: 700;
+    }
+
+    .grand-label {
       font-size: 0.75rem;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-weight: 600;
-      margin-right: 6px;
-      display: inline-block;
-      border: 1px solid currentColor;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 0.2rem;
+    }
+
+    .grand-score {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 0 0 12px rgba(34, 197, 94, 0.6);
+      line-height: 1.1;
+    }
+
+    .grand-sub {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    .podium-card {
+      position: relative;
+      background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.8));
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 2px solid var(--card-border);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .podium-card.winner {
+      background: linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(15, 23, 42, 0.95));
+      border-color: #eab308;
+      box-shadow: 0 0 20px rgba(234, 179, 8, 0.3);
+    }
+
+    .podium-total-badge {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .toggle-details-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 0.6rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+      text-align: center;
+      margin-top: 0.3rem;
+    }
+    .toggle-details-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .round-ranking-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 0.75rem;
+      margin-top: 0.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .round-ranking-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
     .btn {
@@ -288,20 +560,69 @@
       border: none;
       border-radius: 10px;
       font-size: 1rem;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
-      transition: background 0.15s ease, transform 0.1s;
+      transition: background 0.15s ease, transform 0.1s, box-shadow 0.2s;
     }
 
     .btn:active {
       transform: scale(0.99);
     }
 
-    .btn-primary { background: var(--primary); color: #0f172a; }
-    .btn-primary:hover { background: var(--primary-hover); }
-    .btn-stop { background: var(--danger); color: #ffffff; }
-    .btn-secondary { background: #334155; color: var(--text-main); }
-    .btn-secondary:hover { background: #475569; }
+    .btn-primary { 
+      background: var(--primary); 
+      color: #0f172a; 
+    }
+    .btn-primary:hover { 
+      background: var(--primary-hover); 
+    }
+
+    .btn-next-round {
+      background: var(--btn-next-round-bg);
+      color: #ffffff;
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
+    }
+    .btn-next-round:hover {
+      background: var(--btn-next-round-hover);
+    }
+
+    .btn-next-player {
+      background: #1e293b;
+      color: #f8fafc;
+      border: 2px solid var(--primary);
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.25);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      padding: 0.65rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-next-player:hover {
+      background: #334155;
+      border-color: #7dd3fc;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(56, 189, 248, 0.4);
+    }
+    .btn-next-player .np-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+    .btn-next-player .np-name {
+      font-size: 1.15rem;
+      font-weight: 800;
+    }
+
+    .btn-stop { 
+      background: var(--color-bad); 
+      color: #ffffff; 
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    }
 
     .key-hint {
       text-align: center;
@@ -319,102 +640,146 @@
 </head>
 <body>
 
+  <!-- Bouton Salon en haut à gauche -->
+  <button class="room-btn-top" id="roomBtnTop">
+    🏠 <span id="roomBtnLabel">Salon en ligne</span>
+  </button>
+
+  <!-- Modale de Gestion de Salon -->
+  <div class="modal-overlay" id="roomModal">
+    <div class="modal-card">
+      <h2>Mode Salon en Ligne</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">Créez un salon ou rejoignez un salon existant avec un code à 3 chiffres.</p>
+      
+      <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+        <button class="btn btn-primary" id="createRoomBtn">Créer un salon</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 1rem; margin: 0.5rem 0;">
+        <hr style="flex: 1; border-color: var(--card-border);">
+        <span style="font-size: 0.75rem; color: var(--text-muted);">OU REJOINDRE</span>
+        <hr style="flex: 1; border-color: var(--card-border);">
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <input type="text" class="modal-input" id="roomCodeInput" maxlength="3" placeholder="123">
+        <button class="btn" style="background: #334155; color: #fff;" id="joinRoomBtn">Rejoindre le salon</button>
+      </div>
+
+      <div class="modal-actions" style="margin-top: 1rem;">
+        <button class="btn" style="background: transparent; border: 1px solid var(--card-border); color: var(--text-muted);" id="closeModalBtn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
   <div class="container">
     <header>
       <h1>Chrono Précision</h1>
       <p class="subtitle">Arrête le chrono au bon moment</p>
     </header>
 
-    <div class="card">
-      <!-- Choix du Mode -->
-      <div class="mode-selector">
-        <button class="mode-btn active" id="modeSoloBtn">Solo</button>
-        <button class="mode-btn" id="modeMultiBtn">Multijoueur Local</button>
+    <div class="card" id="gameCard">
+      <div id="gameModeIndicator" style="text-align: center; font-size: 0.78rem; font-weight: 600; padding: 6px 12px; border-radius: 6px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+        Solo • Chrono Visible • 1 manche(s)
       </div>
 
-      <!-- Config Nombre de Manche / Rounds -->
+      <div class="mode-selector">
+        <button class="mode-btn active" id="modeSoloBtn">Solo</button>
+        <button class="mode-btn" id="modeMultiBtn">Multijoueur (2-4)</button>
+      </div>
+
       <div class="setup-row">
-        <span>Nombre de manche(s) :</span>
+        <span>nombre de manche(s)</span>
         <div class="opt-btns" id="roundSelectBtns">
           <button class="opt-btn active" data-rounds="1">1</button>
+          <button class="opt-btn" data-rounds="2">2</button>
           <button class="opt-btn" data-rounds="3">3</button>
+          <button class="opt-btn" data-rounds="4">4</button>
           <button class="opt-btn" data-rounds="5">5</button>
         </div>
       </div>
 
-      <!-- Config Multijoueur -->
       <div class="setup-row" id="multiSetup" style="display: none;">
-        <span>Nombre de joueurs :</span>
+        <span>Nombre de joueurs</span>
         <div class="opt-btns" id="playerSelectBtns">
-          <button class="opt-btn active" data-players="2">2</button>
-          <button class="opt-btn" data-players="3">3</button>
+          <button class="opt-btn" data-players="2">2</button>
+          <button class="opt-btn active" data-players="3">3</button>
           <button class="opt-btn" data-players="4">4</button>
         </div>
       </div>
 
-      <!-- En-tête Statut Manche / Joueur -->
-      <div class="status-bar" id="statusBar">
+      <div class="setup-row" id="timerVisibilityRow">
+        <span>Afficher le chrono</span>
+        <label class="switch">
+          <input type="checkbox" id="timerToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="status-bar">
         <span id="roundIndicator">Manche 1 / 1</span>
         <span id="playerIndicator" style="display: none;">Joueur 1</span>
       </div>
 
-      <!-- Cible & Chrono -->
       <div class="target-box">
         <div class="target-label">Objectif</div>
-        <div class="target-time" id="targetDisplay">0.00s</div>
+        <div class="target-time" id="targetDisplay">5.00s</div>
       </div>
 
       <div class="timer-display" id="timerDisplay">0.00</div>
 
-      <!-- Resultat & Feedback -->
       <div class="result-feedback">
-        <div id="diffBadge" class="diff-badge" style="display: none;">+0.00s</div>
+        <div class="diff-badge" id="diffBadge" style="display: none;">+0.00s</div>
       </div>
 
-      <!-- Tableau des Scores & Classement -->
       <div class="scoreboard" id="scoreboard" style="display: none;"></div>
 
-      <!-- Bouton d'Action Principal -->
       <button class="btn btn-primary" id="mainBtn">DÉMARRER</button>
-      
+
       <div class="key-hint">Touche <kbd>ESPACE</kbd> pour démarrer / stopper</div>
     </div>
   </div>
 
   <script>
-    // --- Codes Couleurs DISTINCTS ---
-    // Manches : Rose, Ambre, Vert Émeraude, Cyan, Orange
     const roundColors = ['var(--color-r1)', 'var(--color-r2)', 'var(--color-r3)', 'var(--color-r4)', 'var(--color-r5)'];
-    // Joueurs : Bleu Néon, Violet, Vert Lime, Rouge Corail
     const playerColors = ['var(--color-p1)', 'var(--color-p2)', 'var(--color-p3)', 'var(--color-p4)'];
 
-    // --- État global du jeu ---
     let mode = 'SOLO'; 
     let state = 'IDLE'; 
     
     let totalRounds = 1;
     let currentRound = 1;
     
-    let playerCount = 2;
+    let playerCount = 3;
     let currentPlayer = 0; 
+    let showMultiDetails = false;
+
+    let showTimerDuringGame = true;
+    let playerNames = ['Joueur 1', 'Joueur 2', 'Joueur 3', 'Joueur 4'];
 
     let targetTime = 0;
     let startTime = 0;
     let elapsedTime = 0;
     let animFrameId = null;
 
-    // Data Structures
     let soloHistory = []; 
     let multiHistory = [];
+    let soloTargets = [];
 
-    // --- DOM Elements ---
+    let currentRoomCode = null;
+    let myClientId = Math.random().toString(36).substring(2, 8);
+    let unsubFirestore = null;
+
+    const gameCard = document.getElementById('gameCard');
     const modeSoloBtn = document.getElementById('modeSoloBtn');
     const modeMultiBtn = document.getElementById('modeMultiBtn');
     const multiSetup = document.getElementById('multiSetup');
+    const timerVisibilityRow = document.getElementById('timerVisibilityRow');
+    const timerToggle = document.getElementById('timerToggle');
     const roundSelectBtns = document.getElementById('roundSelectBtns');
     const playerSelectBtns = document.getElementById('playerSelectBtns');
+    const gameModeIndicator = document.getElementById('gameModeIndicator');
     
-    const statusBar = document.getElementById('statusBar');
     const roundIndicator = document.getElementById('roundIndicator');
     const playerIndicator = document.getElementById('playerIndicator');
 
@@ -424,6 +789,134 @@
     const scoreboard = document.getElementById('scoreboard');
     const mainBtn = document.getElementById('mainBtn');
 
+    const roomBtnTop = document.getElementById('roomBtnTop');
+    const roomBtnLabel = document.getElementById('roomBtnLabel');
+    const roomModal = document.getElementById('roomModal');
+    const createRoomBtn = document.getElementById('createRoomBtn');
+    const joinRoomBtn = document.getElementById('joinRoomBtn');
+    const roomCodeInput = document.getElementById('roomCodeInput');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+
+    roomBtnTop.addEventListener('click', () => roomModal.classList.add('open'));
+    closeModalBtn.addEventListener('click', () => roomModal.classList.remove('open'));
+
+    function generate3DigitCode() {
+      return Math.floor(Math.random() * 900 + 100).toString();
+    }
+
+    createRoomBtn.addEventListener('click', () => {
+      const code = generate3DigitCode();
+      connectToRoom(code);
+      roomModal.classList.remove('open');
+      alert(`Salon créé avec succès !\nVotre code à 3 chiffres est : ${code}`);
+    });
+
+    joinRoomBtn.addEventListener('click', () => {
+      const code = roomCodeInput.value.trim();
+      if (!code || code.length !== 3 || isNaN(code)) {
+        alert("Veuillez entrer un code de salon valide à 3 chiffres.");
+        return;
+      }
+      connectToRoom(code);
+      roomModal.classList.remove('open');
+    });
+
+    function connectToRoom(code) {
+      currentRoomCode = code;
+      roomBtnTop.classList.add('active-room');
+
+      if (!window.firebaseDB || !window.firebaseDB.db) {
+        console.warn("Base de données en ligne indisponible.");
+        return;
+      }
+
+      const { db, doc, onSnapshot } = window.firebaseDB;
+      if (unsubFirestore) unsubFirestore();
+
+      unsubFirestore = onSnapshot(doc(db, "artifacts", "chrono_precision", "rooms", code), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          
+          // Gérer la présence / comptage des membres
+          let members = data.members || {};
+          members[myClientId] = Date.now();
+          
+          // Nettoyer les membres inactifs depuis plus de 10 secondes
+          const now = Date.now();
+          const activeMembersCount = Object.keys(members).filter(id => now - members[id] < 10000).length;
+          
+          roomBtnLabel.textContent = `Salon ${code} (${activeMembersCount} 👤)`;
+
+          if (data && data.gameState) {
+            applyRemoteState(data.gameState);
+          }
+        } else {
+          // Créer le document de salon initial
+          syncStateToFirebase();
+        }
+      });
+
+      // Envoyer un battement de coeur (heartbeat) toutes les 4 secondes pour garder le membre actif dans le compteur
+      setInterval(() => {
+        if (!currentRoomCode) return;
+        const { db, doc, setDoc } = window.firebaseDB;
+        setDoc(doc(db, "artifacts", "chrono_precision", "rooms", currentRoomCode), {
+          members: { [myClientId]: Date.now() }
+        }, { merge: true });
+      }, 4000);
+    }
+
+    function syncStateToFirebase() {
+      if (!currentRoomCode || !window.firebaseDB || !window.firebaseDB.db) return;
+      const { db, doc, setDoc } = window.firebaseDB;
+
+      const gameState = {
+        mode, state, totalRounds, currentRound, playerCount,
+        currentPlayer, showTimerDuringGame, playerNames,
+        targetTime, elapsedTime, soloTargets,
+        soloHistory: JSON.stringify(soloHistory),
+        multiHistory: JSON.stringify(multiHistory)
+      };
+
+      setDoc(doc(db, "artifacts", "chrono_precision", "rooms", currentRoomCode), { 
+        gameState,
+        members: { [myClientId]: Date.now() }
+      }, { merge: true });
+    }
+
+    function applyRemoteState(data) {
+      mode = data.mode;
+      state = data.state;
+      totalRounds = data.totalRounds;
+      currentRound = data.currentRound;
+      playerCount = data.playerCount;
+      currentPlayer = data.currentPlayer;
+      showTimerDuringGame = data.showTimerDuringGame;
+      playerNames = data.playerNames || playerNames;
+      targetTime = data.targetTime;
+      elapsedTime = data.elapsedTime;
+      soloTargets = data.soloTargets || [];
+      try { soloHistory = JSON.parse(data.soloHistory || '[]'); } catch(e){}
+      try { multiHistory = JSON.parse(data.multiHistory || '[]'); } catch(e){}
+
+      targetDisplay.textContent = formatTime(targetTime) + 's';
+      timerDisplay.textContent = formatTime(elapsedTime);
+
+      if (mode === 'SOLO') {
+        modeSoloBtn.classList.add('active');
+        modeMultiBtn.classList.remove('active');
+        multiSetup.style.display = 'none';
+        renderSoloHistory();
+      } else {
+        modeMultiBtn.classList.add('active');
+        modeSoloBtn.classList.remove('active');
+        multiSetup.style.display = 'flex';
+        renderMultiProgressive();
+      }
+      updateCardTheme();
+      updateSetupVisibility();
+    }
+
     function getRandomTarget() {
       return parseFloat((Math.random() * 8 + 2).toFixed(2));
     }
@@ -432,55 +925,106 @@
       return seconds.toFixed(2);
     }
 
-    // --- Réinitialisation d'une nouvelle Partie complète ---
+    function getPrecisionStyle(absDiff) {
+      if (absDiff < 0.05) {
+        return { color: 'var(--color-perfect)', label: 'Parfait !', bg: 'rgba(34, 197, 94, 0.15)' };
+      } else if (absDiff < 0.20) {
+        return { color: 'var(--color-good)', label: 'Très bon !', bg: 'rgba(234, 179, 8, 0.15)' };
+      } else if (absDiff < 0.50) {
+        return { color: 'var(--color-medium)', label: 'Moyen', bg: 'rgba(249, 115, 22, 0.15)' };
+      } else {
+        return { color: 'var(--color-bad)', label: 'Éloigné', bg: 'rgba(239, 68, 68, 0.15)' };
+      }
+    }
+
+    function updateCardTheme() {
+      const roundColor = roundColors[(currentRound - 1) % roundColors.length];
+      gameCard.style.borderColor = roundColor;
+      gameCard.style.boxShadow = `0 0 15px ${roundColor}22`;
+      
+      const modeText = mode === 'SOLO' ? 'Solo' : `Multijoueur (${playerCount} joueurs)`;
+      const timerText = showTimerDuringGame ? 'Chrono Visible' : 'Chrono Masqué';
+      const roundText = `${totalRounds} manche${totalRounds > 1 ? 's' : ''}`;
+      gameModeIndicator.textContent = `${modeText} • ${timerText} • ${roundText}`;
+    }
+
+    function updateSetupVisibility() {
+      if (state === 'IDLE' && (mode === 'SOLO' || (mode === 'MULTI' && currentPlayer === 0 && currentRound === 1))) {
+        roundSelectBtns.parentElement.style.display = 'flex';
+        if (mode === 'MULTI') multiSetup.style.display = 'flex';
+        timerVisibilityRow.style.display = 'flex';
+      } else {
+        roundSelectBtns.parentElement.style.display = 'none';
+        multiSetup.style.display = 'none';
+        timerVisibilityRow.style.display = 'none';
+      }
+    }
+
     function startNewGame() {
       currentRound = 1;
       currentPlayer = 0;
       soloHistory = [];
-      
-      if (mode === 'MULTI') {
-        multiHistory = Array.from({ length: totalRounds }, () => new Array(playerCount).fill(null));
-      }
-
+      showMultiDetails = false;
+      soloTargets = Array.from({ length: totalRounds }, () => getRandomTarget());
+      multiHistory = Array.from({ length: totalRounds }, () => Array(playerCount).fill(null));
       setupNewRound();
+      syncStateToFirebase();
     }
 
-    // --- Configuration d'une nouvelle Manche ---
     function setupNewRound() {
-      targetTime = getRandomTarget();
-      targetDisplay.textContent = `${formatTime(targetTime)}s`;
-      currentPlayer = 0;
-      
-      preparePlayerTurn();
+      targetTime = soloTargets[currentRound - 1] !== undefined ? soloTargets[currentRound - 1] : getRandomTarget();
+      targetDisplay.textContent = formatTime(targetTime) + 's';
+      if (mode === 'SOLO') {
+        prepareSoloTurn();
+      } else {
+        preparePlayerTurn();
+      }
     }
 
-    // --- Préparation du tour du joueur en cours ---
-    function preparePlayerTurn() {
+    function prepareSoloTurn() {
       if (state === 'RUNNING') cancelAnimationFrame(animFrameId);
-      
       state = 'IDLE';
       timerDisplay.textContent = '0.00';
       timerDisplay.classList.remove('running');
       diffBadge.style.display = 'none';
-
+      updateSetupVisibility();
       roundIndicator.textContent = `Manche ${currentRound} / ${totalRounds}`;
       roundIndicator.style.color = roundColors[(currentRound - 1) % roundColors.length];
+      playerIndicator.style.display = 'none';
+      updateCardTheme();
+      scoreboard.style.display = soloHistory.length > 0 ? 'flex' : 'none';
+      if (soloHistory.length > 0) renderSoloHistory();
 
-      if (mode === 'SOLO') {
-        playerIndicator.style.display = 'none';
-        scoreboard.style.display = soloHistory.length > 0 ? 'flex' : 'none';
-        renderSoloHistory();
-        mainBtn.textContent = 'DÉMARRER';
-      } else {
-        playerIndicator.style.display = 'inline';
-        playerIndicator.textContent = `Joueur ${currentPlayer + 1}`;
-        playerIndicator.style.color = playerColors[currentPlayer % playerColors.length];
-        scoreboard.style.display = 'flex';
-        renderMultiProgressive();
-        mainBtn.textContent = `JOUEUR ${currentPlayer + 1} - DÉMARRER`;
-      }
-
+      const roundColor = roundColors[(currentRound - 1) % roundColors.length];
+      mainBtn.innerHTML = 'DÉMARRER';
       mainBtn.className = 'btn btn-primary';
+      mainBtn.style.background = roundColor;
+      mainBtn.style.color = '#0f172a';
+    }
+
+    function preparePlayerTurn() {
+      if (state === 'RUNNING') cancelAnimationFrame(animFrameId);
+      state = 'IDLE';
+      timerDisplay.textContent = '0.00';
+      timerDisplay.classList.remove('running');
+      diffBadge.style.display = 'none';
+      updateSetupVisibility();
+      roundIndicator.textContent = `Manche ${currentRound} / ${totalRounds}`;
+      roundIndicator.style.color = roundColors[(currentRound - 1) % roundColors.length];
+      updateCardTheme();
+
+      playerIndicator.style.display = 'inline';
+      playerIndicator.textContent = playerNames[currentPlayer];
+      playerIndicator.style.color = playerColors[currentPlayer % playerColors.length];
+
+      scoreboard.style.display = 'flex';
+      renderMultiProgressive();
+      
+      const activePlayerColor = playerColors[currentPlayer % playerColors.length];
+      mainBtn.innerHTML = 'DÉMARRER';
+      mainBtn.className = 'btn btn-primary';
+      mainBtn.style.background = activePlayerColor;
+      mainBtn.style.color = '#0f172a';
     }
 
     function startTimer() {
@@ -488,17 +1032,25 @@
       startTime = performance.now();
       timerDisplay.classList.add('running');
       diffBadge.style.display = 'none';
+      updateSetupVisibility();
 
-      mainBtn.textContent = 'STOP !';
+      mainBtn.innerHTML = 'STOP !';
       mainBtn.className = 'btn btn-stop';
+      mainBtn.style.background = '';
+      mainBtn.style.color = '';
 
       function update() {
         if (state !== 'RUNNING') return;
         elapsedTime = (performance.now() - startTime) / 1000;
-        timerDisplay.textContent = formatTime(elapsedTime);
+        if (showTimerDuringGame || elapsedTime <= 1.0) {
+          timerDisplay.textContent = formatTime(elapsedTime);
+        } else {
+          timerDisplay.textContent = "??.??";
+        }
         animFrameId = requestAnimationFrame(update);
       }
       animFrameId = requestAnimationFrame(update);
+      syncStateToFirebase();
     }
 
     function stopTimer() {
@@ -509,64 +1061,66 @@
 
       const diff = elapsedTime - targetTime;
       const absDiff = Math.abs(diff);
+      const precision = getPrecisionStyle(absDiff);
 
-      // Affichage Badge Résultat
-      diffBadge.style.display = 'inline-block';
-      diffBadge.textContent = `${diff >= 0 ? '+' : ''}${formatTime(diff)}s`;
+      diffBadge.style.display = 'inline-flex';
+      diffBadge.style.color = precision.color;
+      diffBadge.style.backgroundColor = precision.bg;
+      diffBadge.style.borderColor = precision.color;
+      diffBadge.innerHTML = `<span>${diff >= 0 ? '+' : ''}${formatTime(diff)}s</span> <span style="font-size:0.85rem; opacity:0.9;">(${precision.label})</span>`;
 
-      if (absDiff <= 0.05) {
-        diffBadge.className = 'diff-badge diff-perfect';
-        if (typeof confetti === 'function') confetti({ particleCount: 50, spread: 60 });
-      } else if (absDiff <= 0.20) {
-        diffBadge.className = 'diff-badge diff-good';
-      } else {
-        diffBadge.className = 'diff-badge diff-bad';
+      if (absDiff < 0.05 && typeof confetti === 'function') {
+        confetti({ particleCount: 60, spread: 70, origin: { y: 0.7 } });
       }
 
-      // Enregistrement des scores
       if (mode === 'SOLO') {
-        soloHistory.push({
-          round: currentRound,
-          signedDiff: diff,
-          absDiff: absDiff
-        });
-        
+        soloHistory.push({ round: currentRound, signedDiff: diff, absDiff: absDiff });
         renderSoloHistory();
-
         if (currentRound < totalRounds) {
-          mainBtn.textContent = 'MANCHE SUIVANTE';
-          mainBtn.className = 'btn btn-secondary';
+          mainBtn.innerHTML = 'MANCHE SUIVANTE';
+          mainBtn.className = 'btn btn-next-round';
+          mainBtn.style.background = '';
+          mainBtn.style.color = '';
         } else {
           state = 'GAME_OVER';
-          renderSoloHistory(); 
-          mainBtn.textContent = 'NOUVELLE PARTIE';
+          renderSoloHistory();
+          mainBtn.innerHTML = 'NOUVELLE PARTIE';
           mainBtn.className = 'btn btn-primary';
-          if (typeof confetti === 'function') confetti({ particleCount: 80, spread: 70 });
+          mainBtn.style.background = '';
+          mainBtn.style.color = '';
+          if (typeof confetti === 'function') confetti({ particleCount: 90, spread: 80 });
         }
       } else {
-        // Mode Multijoueur
-        multiHistory[currentRound - 1][currentPlayer] = {
-          signedDiff: diff,
-          absDiff: absDiff
-        };
-
+        multiHistory[currentRound - 1][currentPlayer] = { signedDiff: diff, absDiff: absDiff };
         renderMultiProgressive();
 
         if (currentPlayer < playerCount - 1) {
-          mainBtn.textContent = `JOUEUR SUIVANT (J${currentPlayer + 2})`;
-          mainBtn.className = 'btn btn-secondary';
+          const nextPlayerName = playerNames[currentPlayer + 1];
+          const nextPlayerColor = playerColors[(currentPlayer + 1) % playerColors.length];
+          mainBtn.className = 'btn btn-next-player';
+          mainBtn.style.background = '';
+          mainBtn.style.color = '';
+          mainBtn.innerHTML = `
+            <span class="np-label">Au tour de</span>
+            <span class="np-name" style="color: ${nextPlayerColor};">${nextPlayerName} ➔</span>
+          `;
         } else {
           if (currentRound < totalRounds) {
-            mainBtn.textContent = 'MANCHE SUIVANTE';
-            mainBtn.className = 'btn btn-secondary';
+            mainBtn.innerHTML = 'MANCHE SUIVANTE';
+            mainBtn.className = 'btn btn-next-round';
+            mainBtn.style.background = '';
+            mainBtn.style.color = '';
           } else {
             state = 'GAME_OVER';
             renderFinalMultiRanking();
-            mainBtn.textContent = 'REJOUER UNE PARTIE';
+            mainBtn.innerHTML = 'REJOUER UNE PARTIE';
             mainBtn.className = 'btn btn-primary';
+            mainBtn.style.background = '';
+            mainBtn.style.color = '';
           }
         }
       }
+      syncStateToFirebase();
     }
 
     function handleMainAction() {
@@ -584,12 +1138,47 @@
             preparePlayerTurn();
           } else {
             currentRound++;
+            currentPlayer = 0;
             setupNewRound();
           }
         }
+        syncStateToFirebase();
       } else if (state === 'GAME_OVER') {
         startNewGame();
       }
+    }
+
+    function setupPlayerNameEditing(badgeEl, pIdx) {
+      badgeEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const currentName = playerNames[pIdx];
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentName;
+        input.className = 'nickname-input';
+        
+        badgeEl.replaceWith(input);
+        input.focus();
+        input.select();
+
+        const saveName = () => {
+          const newName = input.value.trim();
+          if (newName) playerNames[pIdx] = newName;
+          if (mode === 'MULTI' && state !== 'GAME_OVER') {
+            preparePlayerTurn();
+          } else if (state === 'GAME_OVER') {
+            renderFinalMultiRanking();
+          } else {
+            renderMultiProgressive();
+          }
+          syncStateToFirebase();
+        };
+
+        input.addEventListener('blur', saveName);
+        input.addEventListener('keydown', (evt) => {
+          if (evt.key === 'Enter') saveName();
+        });
+      });
     }
 
     function renderSoloHistory() {
@@ -600,35 +1189,33 @@
       soloHistory.forEach(item => {
         const row = document.createElement('div');
         row.className = 'score-row';
-        
-        // Couleur de la MANCHE
-        const color = roundColors[(item.round - 1) % roundColors.length];
-        
-        // Encadré de la couleur de la MANCHE en Mode SOLO
-        row.style.borderColor = color;
-
+        const rColor = roundColors[(item.round - 1) % roundColors.length];
+        const prec = getPrecisionStyle(item.absDiff);
+        row.style.borderColor = rColor;
         const sign = item.signedDiff >= 0 ? '+' : '';
         row.innerHTML = `
           <div>
-            <span class="badge-round" style="background: rgba(255,255,255,0.06); color: ${color};">Manche ${item.round}</span>
+            <span class="badge-round" style="background: ${rColor}22; color: ${rColor}; border: 1px solid ${rColor}55;">Manche ${item.round}</span>
           </div>
-          <span style="font-weight: 600;">Écart : ${sign}${formatTime(item.signedDiff)}s</span>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="diff-pill" style="color: ${prec.color}; background: ${prec.bg};">Écart : ${sign}${formatTime(item.signedDiff)}s</span>
+          </div>
         `;
         scoreboard.appendChild(row);
       });
 
-      // Si partie terminée : ligne Récapitulatif Total
       if (state === 'GAME_OVER') {
         const totalDiff = soloHistory.reduce((acc, curr) => acc + curr.absDiff, 0);
         const avgDiff = totalDiff / soloHistory.length;
-
-        const summaryRow = document.createElement('div');
-        summaryRow.className = 'score-row summary';
-        summaryRow.innerHTML = `
-          <span>TOTAL (${soloHistory.length} manches)</span>
-          <span>Écart Total : ${formatTime(totalDiff)}s (Moy: ${formatTime(avgDiff)}s)</span>
+        const summaryCard = document.createElement('div');
+        summaryCard.className = 'grand-summary-card';
+        summaryCard.innerHTML = `
+          <div class="grand-title">🏆 Bilan Final (${soloHistory.length} manche${soloHistory.length > 1 ? 's' : ''})</div>
+          <div class="grand-label">Écart total cumulé</div>
+          <div class="grand-score">${formatTime(totalDiff)}s</div>
+          <div class="grand-sub">Écart Moyen : <strong style="color: #fff;">${formatTime(avgDiff)}s</strong> par manche</div>
         `;
-        scoreboard.appendChild(summaryRow);
+        scoreboard.appendChild(summaryCard);
       }
     }
 
@@ -636,52 +1223,58 @@
       scoreboard.style.display = 'flex';
       scoreboard.innerHTML = '';
 
-      for (let r = 0; r < currentRound; r++) {
-        const roundData = multiHistory[r] || [];
-        const rColor = roundColors[r % roundColors.length];
+      for (let p = 0; p < playerCount; p++) {
+        const pColor = playerColors[p % playerColors.length];
+        let cumulativeTotal = 0;
+        let roundsPlayedCount = 0;
+        let lastRoundPlayed = null;
 
-        for (let p = 0; p < playerCount; p++) {
-          const item = roundData[p];
-          const isCurrentTurn = (r === currentRound - 1 && p === currentPlayer && state !== 'STOPPED' && state !== 'GAME_OVER');
-          const pColor = playerColors[p % playerColors.length];
-
-          if (!item && !isCurrentTurn && r === currentRound - 1 && p > currentPlayer) {
-            continue;
+        for (let r = 0; r < totalRounds; r++) {
+          if (multiHistory[r] && multiHistory[r][p] !== null && multiHistory[r][p] !== undefined) {
+            cumulativeTotal += multiHistory[r][p].absDiff;
+            roundsPlayedCount++;
+            lastRoundPlayed = r + 1;
           }
-
-          // Calcul de l'écart cumulé du joueur p jusqu'à cette manche r
-          let cumulativeTotal = 0;
-          for (let prevR = 0; prevR <= r; prevR++) {
-            if (multiHistory[prevR] && multiHistory[prevR][p]) {
-              cumulativeTotal += multiHistory[prevR][p].absDiff;
-            }
-          }
-
-          const row = document.createElement('div');
-          row.className = `score-row ${isCurrentTurn ? 'current' : ''}`;
-          
-          // Encadré de la couleur du JOUEUR en Mode MULTIJOUEUR
-          row.style.borderColor = pColor;
-
-          let scoreText = 'En cours...';
-          if (item) {
-            const sign = item.signedDiff >= 0 ? '+' : '';
-            scoreText = `${sign}${formatTime(item.signedDiff)}s`;
-            if (totalRounds > 1) {
-              scoreText += ` <span style="color: var(--text-muted); font-size: 0.78rem;">(Total: ${formatTime(cumulativeTotal)}s)</span>`;
-            }
-          }
-
-          row.innerHTML = `
-            <div>
-              <span class="badge-round" style="background: rgba(255,255,255,0.06); color: ${rColor};">Manche ${r + 1}</span>
-              <span class="badge-player" style="background: rgba(255,255,255,0.06); color: ${pColor};">Joueur ${p + 1}</span>
-              ${isCurrentTurn ? '👈' : ''}
-            </div>
-            <div style="font-weight: 600;">${scoreText}</div>
-          `;
-          scoreboard.appendChild(row);
         }
+
+        const isCurrentActiveTurn = (p === currentPlayer && state !== 'GAME_OVER');
+        const row = document.createElement('div');
+        row.className = `score-row ${isCurrentActiveTurn ? 'active-turn' : ''}`;
+        row.style.borderColor = pColor;
+        if (isCurrentActiveTurn) row.style.background = `${pColor}15`;
+
+        let rightSideContent = '';
+        if (roundsPlayedCount === 0) {
+          rightSideContent = `<span style="color: var(--text-muted); font-size: 0.8rem; font-style: italic;">En attente...</span>`;
+        } else {
+          const latestResult = multiHistory[lastRoundPlayed - 1][p];
+          if (!latestResult) {
+            rightSideContent = `<span style="color: var(--text-muted); font-size: 0.8rem; font-style: italic;">En attente...</span>`;
+          } else {
+            const prec = getPrecisionStyle(latestResult.absDiff);
+            const sign = latestResult.signedDiff >= 0 ? '+' : '';
+            rightSideContent = `
+              <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                <span class="diff-pill" style="color: ${prec.color}; background: ${prec.bg}; font-size: 0.75rem;">
+                  Manche ${lastRoundPlayed} : ${sign}${formatTime(latestResult.signedDiff)}s
+                </span>
+                ${totalRounds > 1 ? `<span style="font-weight: 700; color: #f8fafc; font-size: 0.82rem;">Total : ${formatTime(cumulativeTotal)}s</span>` : ''}
+              </div>
+            `;
+          }
+        }
+
+        const badgeId = `pBadge-${p}`;
+        row.innerHTML = `
+          <div style="display: flex; align-items: center;">
+            <span class="badge-player" id="${badgeId}" style="background: ${pColor}22; color: ${pColor}; border: 1px solid ${pColor}55;">${playerNames[p]}</span>
+            ${isCurrentActiveTurn ? `<span style="font-size: 0.8rem; font-weight: 700; color: ${pColor};">👈</span>` : ''}
+          </div>
+          ${rightSideContent}
+        `;
+
+        scoreboard.appendChild(row);
+        setupPlayerNameEditing(document.getElementById(badgeId), p);
       }
     }
 
@@ -696,7 +1289,7 @@
             sumAbs += multiHistory[r][pIdx].absDiff;
           }
         }
-        return { player: pIdx + 1, totalDiff: sumAbs, avgDiff: sumAbs / totalRounds };
+        return { playerIdx: pIdx, totalDiff: sumAbs, avgDiff: sumAbs / totalRounds };
       });
 
       totals.sort((a, b) => a.totalDiff - b.totalDiff);
@@ -704,24 +1297,91 @@
       totals.forEach((item, index) => {
         const row = document.createElement('div');
         const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`;
-        const pColor = playerColors[(item.player - 1) % playerColors.length];
+        const pColor = playerColors[item.playerIdx % playerColors.length];
+        const podiumBadgeId = `podiumBadge-${item.playerIdx}`;
 
-        row.className = `score-row ${index === 0 ? 'rank-1' : ''}`;
+        row.className = `podium-card ${index === 0 ? 'winner' : ''}`;
         row.style.borderColor = pColor;
         row.innerHTML = `
-          <div>
-            <span style="font-size: 1rem; margin-right: 6px;">${medal}</span>
-            <span class="badge-player" style="background: rgba(255,255,255,0.08); color: ${pColor}; font-size: 0.85rem;">Joueur ${item.player}</span>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="font-size: 1.3rem;">${medal}</span>
+            <div>
+              <span class="badge-player" id="${podiumBadgeId}" style="background: ${pColor}22; color: ${pColor}; border: 1px solid ${pColor}55; font-size: 0.85rem;">${playerNames[item.playerIdx]}</span>
+              ${totalRounds > 1 ? `<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Moyenne: ${formatTime(item.avgDiff)}s / manche</div>` : ''}
+            </div>
           </div>
-          <span style="font-weight: 700;">Écart Total : ${formatTime(item.totalDiff)}s</span>
+          <div style="text-align: right;">
+            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;">Écart Total Cumulé</div>
+            <div class="podium-total-badge">${formatTime(item.totalDiff)}s</div>
+          </div>
         `;
         scoreboard.appendChild(row);
+        setupPlayerNameEditing(document.getElementById(podiumBadgeId), item.playerIdx);
       });
 
-      if (typeof confetti === 'function') confetti({ particleCount: 90, spread: 80 });
+      if (totalRounds > 1) {
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'toggle-details-btn';
+        toggleBtn.innerHTML = showMultiDetails ? '🔽 Masquer les détails par manche' : '📊 CLASSEMENT MANCHE PAR MANCHE';
+        
+        toggleBtn.addEventListener('click', () => {
+          showMultiDetails = !showMultiDetails;
+          renderFinalMultiRanking();
+        });
+
+        scoreboard.appendChild(toggleBtn);
+
+        if (showMultiDetails) {
+          for (let r = 0; r < totalRounds; r++) {
+            const rColor = roundColors[r % roundColors.length];
+            let roundResults = [];
+            for (let p = 0; p < playerCount; p++) {
+              if (multiHistory[r] && multiHistory[r][p]) {
+                roundResults.push({ playerIdx: p, absDiff: multiHistory[r][p].absDiff, signedDiff: multiHistory[r][p].signedDiff });
+              }
+            }
+            roundResults.sort((a, b) => a.absDiff - b.absDiff);
+
+            const roundBox = document.createElement('div');
+            roundBox.className = 'round-ranking-box';
+            roundBox.innerHTML = `<div class="round-ranking-title" style="color: ${rColor};"><span>Manche ${r + 1}</span></div>`;
+
+            roundResults.forEach((res, rankIdx) => {
+              const pColor = playerColors[res.playerIdx % playerColors.length];
+              const prec = getPrecisionStyle(res.absDiff);
+              const sign = res.signedDiff >= 0 ? '+' : '';
+              const rMedal = rankIdx === 0 ? '🥇' : rankIdx === 1 ? '🥈' : rankIdx === 2 ? '🥉' : `#${rankIdx + 1}`;
+
+              const itemRow = document.createElement('div');
+              itemRow.className = 'score-row';
+              itemRow.style.borderColor = pColor;
+              itemRow.style.padding = '0.45rem 0.65rem';
+              itemRow.style.fontSize = '0.8rem';
+
+              const uniqueBadgeId = `detailBadge-${r}-${res.playerIdx}`;
+              itemRow.innerHTML = `
+                <div style="display: flex; align-items: center;">
+                  <span style="font-size: 0.9rem; margin-right: 5px;">${rMedal}</span>
+                  <span class="badge-player" id="${uniqueBadgeId}" style="background:${pColor}22; color:${pColor}; border:1px solid ${pColor}55;">${playerNames[res.playerIdx]}</span>
+                </div>
+                <span class="diff-pill" style="color:${prec.color}; background:${prec.bg}; font-size:0.75rem;">
+                  ${sign}${formatTime(res.signedDiff)}s
+                </span>
+              `;
+              roundBox.appendChild(itemRow);
+              setTimeout(() => {
+                const detailBadgeEl = document.getElementById(uniqueBadgeId);
+                if (detailBadgeEl) setupPlayerNameEditing(detailBadgeEl, res.playerIdx);
+              }, 0);
+            });
+            scoreboard.appendChild(roundBox);
+          }
+        }
+      }
+
+      if (typeof confetti === 'function') confetti({ particleCount: 100, spread: 80 });
     }
 
-    // --- Listeners Événements ---
     mainBtn.addEventListener('click', handleMainAction);
 
     window.addEventListener('keydown', (e) => {
@@ -729,6 +1389,12 @@
         e.preventDefault();
         handleMainAction();
       }
+    });
+
+    timerToggle.addEventListener('change', (e) => {
+      showTimerDuringGame = e.target.checked;
+      updateCardTheme();
+      syncStateToFirebase();
     });
 
     modeSoloBtn.addEventListener('click', () => {
@@ -767,7 +1433,6 @@
       });
     });
 
-    // Lancement au chargement
     startNewGame();
   </script>
 </body>
